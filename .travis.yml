@@ -1,32 +1,32 @@
 language: python
+sudo: required
+services:
+  - docker
 python:
   - "2.7"
   - "3.3"
   - "3.6"
+
 env:
   - DOCKER_COMPOSE_VERSION=1.10.0
   - DOCKER_COMPOSE_VERSION=1.20.0
-before_install:
-  - sudo rm /usr/local/bin/docker-compose
-  - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
-  - chmod +x docker-compose
-  - sudo mv docker-compose /usr/local/bin
-install:
-  - pip install -r requirements.txt
-  - git clone --branch v0.4.0 https://github.com/sstephenson/bats.git
-script:
-  - "./bats/bin/bats tests.bats"
-sudo: required
-services:
-  - docker
+
 jobs:
   include:
+    - stage: test
+      script: bats tests.bats
+      before_install:
+        - ./scripts/install-docker-compose.sh
+        - ./scripts/install-bats.sh
+
+      install:
+        - pip install -r requirements.txt
+
     - stage: deploy
       python: "3.6"
       env:
         - DOCKER_COMPOSE_VERSION=1.20.0
-      script:
-        - "echo deploying to Pypi"
+      script: echo "Deploying to Pypi"
       deploy:
         provider: pypi
         user: nicolasvan
