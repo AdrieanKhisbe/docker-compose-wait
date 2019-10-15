@@ -4,7 +4,7 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 
 import subprocess
 import re
-import time
+from time import time, sleep
 import sys
 import argparse
 import yaml
@@ -14,10 +14,8 @@ up_statuses = {"healthy", "up"}
 down_statuses = {"down", "unhealthy", "removed"}
 stabilized_statuses = up_statuses | down_statuses
 
-def call(args):
-    return "\n".join(
-        subprocess.check_output(args).decode().splitlines()  # ! FIXME: check
-    )
+def call(command_args):
+    return subprocess.run(command_args, check=True, stdout=subprocess.PIPE).stdout.decode()
 
 def get_all_statuses():
     containers = call(["docker", "ps", "--all", "--format", "{{.ID}},{{.Status}}"]).splitlines()
@@ -30,23 +28,24 @@ def get_statuses_for_ids(container_ids):
         for container_id in container_ids
     }
 
+NORMALIZED_STATUSES = {
+    "health: starting": "starting",
+    "healthy": "healthy",
+    "unhealthy": "unhealthy",
+    None: "up"
+}
+
 def convert_status(status):
-    res = re.search(r"^([^\s]+)[^\(]*(?:\((.*)\).*)?$", status)
-    if res is None:
+    match = re.search(r"^([^\s]+)[^\(]*(?:\((.*)\).*)?$", status)
+    if not match:
         raise Exception(f"Unknown status format {status}")
 
-    if res.group(1) != "Up":
+    if match.group(1) != "Up":
         return "down"
 
-    if res.group(2) == "health: starting":  #! TO DICT
-        return "starting"
-    elif res.group(2) == "healthy":
-        return "healthy"  #! FIXME
-    elif res.group(2) == "unhealthy":
-        return "unhealthy"
-    elif res.group(2) is None:
-        return "up"
-    else:
+    try:
+        return NORMALIZED_STATUSES[match.group(2)]
+    except KeyError:
         raise Exception(f"Unknown status format {status}")
 
 def get_converted_statuses(container_ids):
@@ -56,21 +55,16 @@ def get_converted_statuses(container_ids):
     }
 
 def get_docker_compose_args(args):
-    nargs = []
-    for f in args.file:
-        nargs += ["-f", f]
-    if args.project_name:
-        nargs += ["-p", args.project_name]
-    return nargs
+    dc_file_args = [arg for arg_list in [["-f", file] for file in args.file] for arg in arg_list]
+    dc_project_args = ["-p", args.project_name] if args.project_name else []
+    return dc_file_args + dc_project_args
 
 def get_services_ids(dc_args):
-    services_names = yaml.load(call(["docker-compose", *dc_args, "config"]))["services"].keys()
-    services = {}
-    for name in services_names:
-        service_id = call(["docker-compose", *dc_args, "ps", "-q", name]).strip()
-        if service_id != "":
-            services[name] = service_id
-    return services
+    services = {
+        name: call(["docker-compose", *dc_args, "ps", "-q", name]).strip()
+        for name in yaml.load(call(["docker-compose", *dc_args, "config"]))["services"].keys()
+    }
+    return {name: service_id for name, service_id in services.items() if service_id}
 
 def get_services_statuses(services_with_ids):
     statuses_by_id = get_converted_statuses(services_with_ids.values())
@@ -84,48 +78,53 @@ def main():
         description="Wait until all services in a docker-compose file are healthy. Options are forwarded to docker-compose.",
         usage="docker-compose-wait.py [options]"
     )
-    parser.add_argument("-f", "--file", action="append", default=[],
-                    help="Specify an alternate compose file (default: docker-compose.yml)")
-    parser.add_argument("-p", "--project-name",
-                    help="Specify an alternate project name (default: directory name)")
-    parser.add_argument("-w", "--wait", action="store_true",
-                    help="Wait for all the processes to stabilize before exit (default behavior is to exit "
-                    + "as soon as any of the processes is unhealthy)")
+    parser.add_argument(
+        "-f", "--file", action="append", default=[],
+        help="Specify an alternate compose file (default: docker-compose.yml)"
+    )
+    parser.add_argument(
+        "-p", "--project-name",
+        help="Specify an alternate project name (default: directory name)"
+    )
+    parser.add_argument(
+        "-w", "--wait", action="store_true",
+        help="Wait for all the processes to stabilize before exit (default behavior is to exit as soon as any of the processes is unhealthy)"
+    )
     parser.add_argument("-t", "--timeout", default=None,
-                    help="Max amount of time during which this command will run (expressed using the "
-                    + "same format than in docker-compose.yml files, example: 5s, 10m,... ). If there is a "
-                    + "timeout this command will exit returning 1. (default: wait for an infinite amount of time)")
+        help="Max amount of time during which this command will run (expressed using the same format than in docker-compose.yml files, "
+        "example: 5s, 10m,... ). If there is a timeout this command will exit returning 1. (default: wait for an infinite amount of time)"
+    )
 
     args = parser.parse_args()
     dc_args = get_docker_compose_args(args)
 
-    start_time = time.time()
+    start_time = time()
     timeout = timeparse(args.timeout) if args.timeout is not None else None
 
     services_ids = get_services_ids(dc_args)
 
     while True:
-        statuses = get_services_statuses(services_ids)
+        services_statuses = get_services_statuses(services_ids)
 
-        if args.wait:
-            if any([v not in stabilized_statuses for k, v in statuses.items()]):
-                continue
+        if args.wait and any([status not in stabilized_statuses for service, status in services_statuses.items()]):
+            continue
 
-        if all([v in up_statuses for k, v in statuses.items()]):
+        if all([status in up_statuses for service, status in services_statuses.items()]):
             print("All processes up and running")
-            exit(0)
-        elif any([v in down_statuses for k, v in statuses.items()]):
+            sys.exit(0)
+
+        down_services_statuses = {service: status for service, status in services_statuses.items() if status in down_statuses}
+        if down_services_statuses:
             print("Some processes failed:")
-            for k, v in [(k, v) for k, v in statuses.items() if v in down_statuses]:
-                print("%s is %s" % (k, v))
-            exit(-1)
+            for service, status in down_services_statuses.items():
+                print(f"{service} is {status}")
+            sys.exit(-1)
 
-        if args.timeout is not None and time.time() > start_time + timeout:
+        if args.timeout is not None and time() > start_time + timeout:
             print("Timeout")
-            exit(1)
+            sys.exit(1)
 
-        time.sleep(1)
+        sleep(1)
 
 if __name__ == "__main__":
-    # execute only if run as a script
     main()
