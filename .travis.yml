@@ -2,14 +2,6 @@ language: python
 sudo: required
 services:
   - docker
-python:
-  - "3.5"
-  - "3.6"
-  - "3.7"
-
-env:
-  - DOCKER_COMPOSE_VERSION=1.10.0
-  - DOCKER_COMPOSE_VERSION=1.20.0
 
 stages:
   - test
@@ -17,23 +9,48 @@ stages:
 
 jobs:
   include:
-    - stage: test
+    - &test-job
+      # this job config will be reused with details overrided
+      stage: test
+      name: test-on-compose-1.10/python3.5
       script: bats tests.bats
       before_install:
         - ./scripts/install-docker-compose.sh
         - ./scripts/install-bats.sh
       install:
         - pip install -r requirements.txt
+      python: "3.5"
+      env: DOCKER_COMPOSE_VERSION=1.10.0
+
+    - <<: *test-job
+      name: test-on-compose-1.10/python3.6
+      python: "3.6"
+      env: DOCKER_COMPOSE_VERSION=1.10.0
+    - <<: *test-job
+      name: test-on-compose-1.10/python3.7
+      python: "3.7"
+      env: DOCKER_COMPOSE_VERSION=1.10.0
+    - <<: *test-job
+      name: test-on-compose-1.20/python3.5
+      python: "3.5"
+      env: DOCKER_COMPOSE_VERSION=1.20.0
+    - <<: *test-job
+      name: test-on-compose-1.20/python3.6
+      python: "3.6"
+      env: DOCKER_COMPOSE_VERSION=1.20.0
+    - <<: *test-job
+      name: test-on-compose-1.20/python3.7
+      python: "3.7"
+      env: DOCKER_COMPOSE_VERSION=1.20.0
 
     - stage: deploy
       if: branch = master
       python: "3.6"
-      env:
-        - DOCKER_COMPOSE_VERSION=1.20.0
+      env: DOCKER_COMPOSE_VERSION=1.20.0
       script: 'echo "Deploying to Pypi"'
       deploy:
         provider: pypi
-        user: nicolasvan
+        username: nicolasvan
         password:
           secure: XyHzM/Fy15pEC0zNRzciaGkMlyof++SbjidgP5Z1iJiZ7Ww9pA2b986wx1ZeuAcRaxkhi9ut+FiGbQesLlN50TxGr3t7lCf4KRoUKzTVNomMpznKBmBBYPZP+e4jI917tJoXca1gGcQgOQU+kHxvLACvULZ1ywusFy1P6DaMIvq76gVBCv1hd42mxL4vBt6GUe78TfFyyVClceW/75/pcdcBlMtp/C8Lz0VKheWRP18vMFGm1EAqkJYWmS6OiGaReagKDzfmZ3v1S3h9gOLdhFIP7gbjM8eCdQG+mzHXhQRp+xFiyE9fg2JErWfMk/Z2Xm8JK2HXJbUmdoJiGYgKdufIw5aOgtRluTQBfu0HZJgJBFLyk0o1iYZ/V9W2zRZz7NiORXEirgSmafLZqdfcZAwjKbQh2oQHU38ITn1jZbip3aCBlwIhBGliEV2aFadKkZn0iAd1WasX2qWAOf3NSjPaBsmR//Uo/2quHhUEvPt0NUNXCVrXHdfnQfouGlKYFLhz2FaurGCbFl93ppkUMpqvmfwytuKqh8uf0dQcYFPTdZcLvHLaeYQBYAZ++/OlNXzRZxYaEr//qEcWhagjDyfRYNE0RllEoNMkmUgZVBlXmoivKUerH8RxFxCSlZSEd7Ru0cXeIDda7pXR7pVCWYq6l2S0/4wAVojibgQ2rLA=
         on:
