@@ -3,9 +3,9 @@ sudo: required
 services:
   - docker
 python:
-  - "2.7"
-  - "3.3"
+  - "3.5"
   - "3.6"
+  - "3.7"
 
 env:
   - DOCKER_COMPOSE_VERSION=1.10.0
