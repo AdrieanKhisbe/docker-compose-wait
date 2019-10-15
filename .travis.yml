@@ -11,6 +11,10 @@ env:
   - DOCKER_COMPOSE_VERSION=1.10.0
   - DOCKER_COMPOSE_VERSION=1.20.0
 
+stages:
+  - test
+  - deploy
+
 jobs:
   include:
     - stage: test
@@ -18,15 +22,15 @@ jobs:
       before_install:
         - ./scripts/install-docker-compose.sh
         - ./scripts/install-bats.sh
-
       install:
         - pip install -r requirements.txt
 
     - stage: deploy
+      if: branch = master
       python: "3.6"
       env:
         - DOCKER_COMPOSE_VERSION=1.20.0
-      script: echo "Deploying to Pypi"
+      script: 'echo "Deploying to Pypi"'
       deploy:
         provider: pypi
         user: nicolasvan
