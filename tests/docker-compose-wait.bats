@@ -1,5 +1,5 @@
 @test "simple" {
-  dc=tests/docker-compose-simple.yml
+  dc=tests/dockerfiles/docker-compose-simple.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc
   [ "$status" -eq 0 ]
@@ -7,7 +7,7 @@
 }
 
 @test "fail" {
-  dc=tests/docker-compose-fail.yml
+  dc=tests/dockerfiles/docker-compose-fail.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc
   [ "$status" -eq 255 ]
@@ -15,7 +15,7 @@
 }
 
 @test "no healthcheck" {
-  dc=tests/docker-compose-no-healthcheck.yml
+  dc=tests/dockerfiles/docker-compose-no-healthcheck.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc
   [ "$status" -eq 0 ]
@@ -23,7 +23,7 @@
 }
 
 @test "down" {
-  dc=tests/docker-compose-down.yml
+  dc=tests/dockerfiles/docker-compose-down.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc
   [ "$status" -eq 255 ]
@@ -31,7 +31,7 @@
 }
 
 @test "2.1" {
-  dc=tests/docker-compose-2.1.yml
+  dc=tests/dockerfiles/docker-compose-2.1.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc
   [ "$status" -eq 0 ]
@@ -39,7 +39,7 @@
 }
 
 @test "no wait" {
-  dc=tests/docker-compose-wait.yml
+  dc=tests/dockerfiles/docker-compose-wait.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc
   [ "$status" -eq 255 ]
@@ -49,7 +49,7 @@
 }
 
 @test "wait" {
-  dc=tests/docker-compose-wait.yml
+  dc=tests/dockerfiles/docker-compose-wait.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc -w
   [ "$status" -eq 255 ]
@@ -59,7 +59,7 @@
 }
 
 @test "timeout" {
-  dc=tests/docker-compose-timeout.yml
+  dc=tests/dockerfiles/docker-compose-timeout.yml
   docker-compose -f $dc up -d
   run python ./docker_compose_wait.py -f $dc -t 2s
   [ "$status" -eq 1 ]
