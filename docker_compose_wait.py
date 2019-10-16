@@ -5,28 +5,27 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import subprocess
 import re
 from time import time, sleep
+from os import path, environ
 import sys
 import argparse
 import yaml
 from compose.timeparse import timeparse
+# ! FIXME: clean
+import docker
+from compose.cli.docker_client import docker_client as dc_client
+from compose.container import Container
+from compose.config import find, load
+from compose.project import Project
+
 
 up_statuses = {"healthy", "up"}
 down_statuses = {"down", "unhealthy", "removed"}
 stabilized_statuses = up_statuses | down_statuses
 
+
 def call(command_args):
     return subprocess.run(command_args, check=True, stdout=subprocess.PIPE).stdout.decode()
 
-def get_all_statuses():
-    containers = call(["docker", "ps", "--all", "--format", "{{.ID}},{{.Status}}"]).splitlines()
-    return [container.split(",") for container in containers]
-
-def get_statuses_for_ids(container_ids):
-    status_list = get_all_statuses()
-    return {
-        container_id: next((c_status for [c_id, c_status] in status_list if container_id.startswith(c_id)), "removed")
-        for container_id in container_ids
-    }
 
 NORMALIZED_STATUSES = {
     "health: starting": "starting",
@@ -34,6 +33,7 @@ NORMALIZED_STATUSES = {
     "unhealthy": "unhealthy",
     None: "up"
 }
+
 
 def convert_status(status):
     match = re.search(r"^([^\s]+)[^\(]*(?:\((.*)\).*)?$", status)
@@ -48,30 +48,30 @@ def convert_status(status):
     except KeyError:
         raise Exception(f"Unknown status format {status}")
 
-def get_converted_statuses(container_ids):
-    return {
-        container_id: convert_status(status)
-        for container_id, status in get_statuses_for_ids(container_ids).items()
-    }
 
-def get_docker_compose_args(args):
-    dc_file_args = [arg for arg_list in [["-f", file] for file in args.file] for arg in arg_list]
-    dc_project_args = ["-p", args.project_name] if args.project_name else []
-    return dc_file_args + dc_project_args
-
-def get_services_ids(dc_args):
+def get_services_ids(project):
     services = {
-        name: call(["docker-compose", *dc_args, "ps", "-q", name]).strip()
-        for name in yaml.load(call(["docker-compose", *dc_args, "config"]))["services"].keys()
+        service.name: next((container.short_id for container in service.containers(stopped=True)), None)
+        # ! FIXME: check service id is container name?
+        for service in project.services
     }
     return {name: service_id for name, service_id in services.items() if service_id}
 
+
 def get_services_statuses(services_with_ids):
-    statuses_by_id = get_converted_statuses(services_with_ids.values())
+    statuses_by_id = {
+        container_id: convert_status(
+            next((c_status for [c_id, c_status] in status_list if container_id.startswith(c_id)), "removed")
+        )
+        for container_id in container_ids #! FIXME
+    }
     return {
         service_name: statuses_by_id[service_id]
         for service_name, service_id in services_with_ids.items()
     }
+
+
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -79,7 +79,7 @@ def main():
         usage="docker-compose-wait.py [options]"
     )
     parser.add_argument(
-        "-f", "--file", action="append", default=[],
+        "-f", "--file", action="append", default=["docker-compose.yml"],
         help="Specify an alternate compose file (default: docker-compose.yml)"
     )
     parser.add_argument(
@@ -96,15 +96,25 @@ def main():
     )
 
     args = parser.parse_args()
-    dc_args = get_docker_compose_args(args)
+
+    docker_client = docker.from_env()
+    docker_compose_client = dc_client(environ)
+    basedir = path.basename(path.dirname(__file__))
+    project_name = args.project_name or basedir
+
+    config = load(find(basedir, args.file, environ))
+    project = Project.from_config(project_name, config, docker_compose_client)
 
     start_time = time()
     timeout = timeparse(args.timeout) if args.timeout is not None else None
 
-    services_ids = get_services_ids(dc_args)
+    services_ids = get_services_ids(project)  # !! FIXME
 
     while True:
-        services_statuses = get_services_statuses(services_ids)
+        all_statuses = docker_client.containers.list(all=True) # .status, .id
+        # containers = call(["docker", "ps", "--all", "--format", "{{.ID}},{{.Status}}"]).splitlines()  # FIXME!  containers(stopped=True) .short_id, human_readable_state/human_readable_health_status
+
+        services_statuses = get_services_statuses(services_ids, all_statuses) # !
 
         if args.wait and any([status not in stabilized_statuses for service, status in services_statuses.items()]):
             continue
