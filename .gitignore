@@ -3,3 +3,6 @@ bats
 dist
 *.egg-info
 .venv
+.pytest_cache
+.vscode
+Pipfile.lock
