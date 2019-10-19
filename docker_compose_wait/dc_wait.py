@@ -99,6 +99,7 @@ def docker_compose_wait(args, environment=environ):
             sys.exit(0)
 
         down_services_statuses = {service: status for service, status in services_statuses.items() if status in down_statuses}
+        print(down_services_statuses)
         if down_services_statuses:
             print("Some processes failed:")
             for service, status in down_services_statuses.items():

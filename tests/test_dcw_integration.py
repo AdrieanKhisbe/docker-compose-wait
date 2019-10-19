@@ -1,7 +1,7 @@
 from subprocess import run, PIPE
 from os import path
 
-DCW_MAIN = path.join(path.dirname(__file__), "..", "docker_compose_wait.py")
+DCW_MAIN = path.join(path.dirname(__file__), "..", "docker_compose_wait", "dc_wait.py")
 
 def dc_file(name):
     return path.join(path.dirname(__file__), "dockerfiles", f"docker-compose-{name}.yml")
@@ -65,6 +65,6 @@ def test_wait():
 
 
 def test_timeout():
-    execution_status = run_launch_dc_and_wait(dc_file("wait"), "-t", "2s")
+    execution_status = run_launch_dc_and_wait(dc_file("timeout"), "-t", "2s")
     run_dc_down(dc_file("timeout"))
     assert execution_status.returncode is 1
