@@ -1,6 +1,9 @@
 __pycache__
 bats
 dist
+build
+tmp
+private
 *.egg-info
 .venv
 .pytest_cache

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from __future__ import division, absolute_import, print_function, unicode_literals
 
 import subprocess
@@ -78,9 +76,9 @@ def get_services_statuses(project):
     }
 
 
-def main(args):
+def docker_compose_wait(args, environment=environ):
     # ! FIXME: conditional adding to >> "docker-compose.yml"
-    docker_compose_client = dc_client(environ)
+    docker_compose_client = dc_client(environment)
     basedir = path.basename(path.dirname(path.abspath(args.file[0])) if args.file else getcwd())
     project_name = args.project_name or basedir
 
@@ -113,6 +111,9 @@ def main(args):
 
         sleep(1)
 
-if __name__ == "__main__":
+def main():
     args = parser.parse_args()
-    main(args)
+    docker_compose_wait(args)
+
+if __name__ == "__main__":
+    main()

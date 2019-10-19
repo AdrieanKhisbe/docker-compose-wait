@@ -15,3 +15,4 @@ python_version = "3.6"
 
 [scripts]
 test = "pytest"
+clean = "rm -rf build dist docker_compose_wait.egg-info .pytest_cache"
