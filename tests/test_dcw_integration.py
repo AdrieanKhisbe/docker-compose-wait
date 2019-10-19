@@ -1,4 +1,4 @@
-from subprocess import run
+from subprocess import run, PIPE
 from os import path
 
 DCW_MAIN = path.join(path.dirname(__file__), "..", "docker_compose_wait.py")
@@ -7,14 +7,14 @@ def dc_file(name):
     return path.join(path.dirname(__file__), "dockerfiles", f"docker-compose-{name}.yml")
 
 def run_launch_dc_and_wait(dc_file, *extra_flags):
-    run(["docker-compose", "-f", dc_file, "up", "-d"], capture_output=True)
+    run(["docker-compose", "-f", dc_file, "up", "-d"], stdout=PIPE, stderr=PIPE)
     return run(
         ["python", DCW_MAIN, "-f", dc_file, *extra_flags],
-        capture_output=True
+        stdout=PIPE, stderr=PIPE  # capture_output only supported from 3.7
     )
 
 def run_dc_down(dc_file):
-    run(["docker-compose", "-f", dc_file, "down"], capture_output=True)
+    run(["docker-compose", "-f", dc_file, "down"], stdout=PIPE, stderr=PIPE)
 
 def test_simple():
     execution_status = run_launch_dc_and_wait(dc_file("simple"))

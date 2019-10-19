@@ -12,28 +12,20 @@ jobs:
     - &test-job
       # this job config will be reused with details overrided
       stage: test
-      name: test-on-compose-1.10/python3.5
+      name: test-on-compose-1.10/python3.6
       script: pipenv run test
       before_install:
         - ./scripts/install-docker-compose.sh
         - pip install pipenv
       install:
         - pipenv install
-      python: "3.5"
-      env: DOCKER_COMPOSE_VERSION=1.10.0
-
-    - <<: *test-job
-      name: test-on-compose-1.10/python3.6
       python: "3.6"
       env: DOCKER_COMPOSE_VERSION=1.10.0
+
     - <<: *test-job
       name: test-on-compose-1.10/python3.7
       python: "3.7"
       env: DOCKER_COMPOSE_VERSION=1.10.0
-    - <<: *test-job
-      name: test-on-compose-1.20/python3.5
-      python: "3.5"
-      env: DOCKER_COMPOSE_VERSION=1.20.0
     - <<: *test-job
       name: test-on-compose-1.20/python3.6
       python: "3.6"
