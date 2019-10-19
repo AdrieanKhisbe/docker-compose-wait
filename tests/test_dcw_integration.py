@@ -8,13 +8,10 @@ def dc_file(name):
 
 def run_launch_dc_and_wait(dc_file, *extra_flags):
     run(["docker-compose", "-f", dc_file, "up", "-d"], capture_output=True)
-    TMP = run(
+    return run(
         ["python", DCW_MAIN, "-f", dc_file, *extra_flags],
-       # capture_output=True
+        capture_output=True
     )
-    print(TMP.stdout)
-    print(TMP.stderr)
-    return TMP
 
 def run_dc_down(dc_file):
     run(["docker-compose", "-f", dc_file, "down"], capture_output=True)
@@ -44,24 +41,27 @@ def test_down():
 
 def test_twodotone():
     execution_status = run_launch_dc_and_wait(dc_file("2.1"))
-    run_dc_down(dc_file("3.1"))
+    run_dc_down(dc_file("2.1"))
     assert execution_status.returncode is 0
 
 
 def test_no_wait():
     execution_status = run_launch_dc_and_wait(dc_file("wait"))
     run_dc_down(dc_file("wait"))
-    assert execution_status.returncode is 0
-    assert "test1" in execution_status.stdout
-    assert "test2" not in execution_status.stdout
+    assert execution_status.returncode is 255
+    output = str(execution_status.stdout)
+    assert "Some processes failed:" in output
+    assert "test1 is unhealthy" in output
+    assert "test2" not in output
 
 
 def test_wait():
-    execution_status = run_launch_dc_and_wait(dc_file("wait"), "-f")
+    execution_status = run_launch_dc_and_wait(dc_file("wait"), "-w")
     run_dc_down(dc_file("wait"))
-    assert execution_status.returncode is 0
-    assert "test1" in execution_status.stdout
-    assert "test2" not in execution_status.stdout
+    assert execution_status.returncode is 255
+    output = str(execution_status.stdout)
+    assert "test1 is unhealthy" in output
+    assert "test2 is unhealthy" in output
 
 
 def test_timeout():

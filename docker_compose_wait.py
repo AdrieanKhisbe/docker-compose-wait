@@ -9,10 +9,8 @@ from os import path, environ, getcwd
 import sys
 import argparse
 import yaml
-from compose.timeparse import timeparse
-# ! FIXME: clean
-import docker
 from compose.cli.docker_client import docker_client as dc_client
+from compose.timeparse import timeparse
 from compose.container import Container
 from compose.config import find, load
 from compose.project import Project
@@ -35,11 +33,12 @@ NORMALIZED_STATUSES = {
 }
 
 
-def convert_status(status):
+def get_status(container):
+    status = container.human_readable_state # use human_readable_state (to avoid unhealthy for exited)
+
     match = re.search(r"^([^\s]+)[^\(]*(?:\((.*)\).*)?$", status)
     if not match:
         raise Exception(f"Unknown status format {status}")
-
     if match.group(1) != "Up":
         return "down"
 
@@ -49,33 +48,16 @@ def convert_status(status):
         raise Exception(f"Unknown status format {status}")
 
 
-def get_services_container_ids(project):
-    #! FIXME: handle no runnng containers!
-    services = {
-        service.name: next((container.short_id for container in service.containers(stopped=True)), None)
-        # ! FIXME: check service id is container name?
+def get_services_statuses(project):
+    # ! FIXME: handle multiple container by service
+    return {
+        service.name: get_status( next(iter(service.containers(stopped=True)), None))
         for service in project.services
     }
-    return {name: service_id for name, service_id in services.items() if service_id}
-
-
-def get_services_statuses(service_to_container, all_statuses):
-    statuses_by_id = {
-        container_id: convert_status(
-            next((container_status.status for container_status in all_statuses if container_id.startswith(container_status.id)), "removed")
-        )
-        for service_name, container_id in service_to_container.items() #! FIXME
-    }
-    print(statuses_by_id)
-    return {
-        service_name: statuses_by_id[service_id]
-        for service_name, service_id in service_to_container.items()
-    }
-
-
 
 
 def main():
+    # ! FIXME: move parser up
     parser = argparse.ArgumentParser(
         description="Wait until all services in a docker-compose file are healthy. Options are forwarded to docker-compose.",
         usage="docker-compose-wait.py [options]"
@@ -100,29 +82,18 @@ def main():
     args = parser.parse_args()
     # ! FIXME: conditional adding to >> "docker-compose.yml"
 
-    docker_client = docker.from_env()
     docker_compose_client = dc_client(environ)
-    print(args.file)
     basedir = path.basename(path.dirname(path.abspath(args.file[0])) if args.file else getcwd())
-    print(f"BASEDIR   {basedir}")
     project_name = args.project_name or basedir
-    print(f"PROJECT   {project_name}")
 
     config = load(find(basedir, [path.abspath(file) for file in args.file], environ))
     project = Project.from_config(project_name, config, docker_compose_client)
-    print(project.services)
 
     start_time = time()
     timeout = timeparse(args.timeout) if args.timeout is not None else None
 
-    services_ids = get_services_container_ids(project)  # !! FIXME
-
     while True:
-        all_statuses = docker_client.containers.list(all=True) # .status, .id
-        # containers = call(["docker", "ps", "--all", "--format", "{{.ID}},{{.Status}}"]).splitlines()
-        # # FIXME!  containers(stopped=True) .short_id, human_readable_state/human_readable_health_status
-
-        services_statuses = get_services_statuses(services_ids, all_statuses) # !
+        services_statuses = get_services_statuses(project)
 
         if args.wait and any([status not in stabilized_statuses for service, status in services_statuses.items()]):
             continue
