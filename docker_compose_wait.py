@@ -25,6 +25,28 @@ def call(command_args):
     return subprocess.run(command_args, check=True, stdout=subprocess.PIPE).stdout.decode()
 
 
+parser = argparse.ArgumentParser(
+    description="Wait until all services in a docker-compose file are healthy. Options are forwarded to docker-compose.",
+    usage="docker-compose-wait.py [options]"
+)
+parser.add_argument(
+    "-f", "--file", action="append", default=[],
+    help="Specify an alternate compose file (default: docker-compose.yml)"
+)
+parser.add_argument(
+    "-p", "--project-name",
+    help="Specify an alternate project name (default: directory name)"
+)
+parser.add_argument(
+    "-w", "--wait", action="store_true",
+    help="Wait for all the processes to stabilize before exit (default behavior is to exit as soon as any of the processes is unhealthy)"
+)
+parser.add_argument("-t", "--timeout", default=None,
+    help="Max amount of time during which this command will run (expressed using the same format than in docker-compose.yml files, "
+    "example: 5s, 10m,... ). If there is a timeout this command will exit returning 1. (default: wait for an infinite amount of time)"
+)
+
+
 NORMALIZED_STATUSES = {
     "health: starting": "starting",
     "healthy": "healthy",
@@ -51,37 +73,13 @@ def get_status(container):
 def get_services_statuses(project):
     # ! FIXME: handle multiple container by service
     return {
-        service.name: get_status( next(iter(service.containers(stopped=True)), None))
+        service.name: get_status(next(iter(service.containers(stopped=True)), None))
         for service in project.services
     }
 
 
-def main():
-    # ! FIXME: move parser up
-    parser = argparse.ArgumentParser(
-        description="Wait until all services in a docker-compose file are healthy. Options are forwarded to docker-compose.",
-        usage="docker-compose-wait.py [options]"
-    )
-    parser.add_argument(
-        "-f", "--file", action="append", default=[],
-        help="Specify an alternate compose file (default: docker-compose.yml)"
-    )
-    parser.add_argument(
-        "-p", "--project-name",
-        help="Specify an alternate project name (default: directory name)"
-    )
-    parser.add_argument(
-        "-w", "--wait", action="store_true",
-        help="Wait for all the processes to stabilize before exit (default behavior is to exit as soon as any of the processes is unhealthy)"
-    )
-    parser.add_argument("-t", "--timeout", default=None,
-        help="Max amount of time during which this command will run (expressed using the same format than in docker-compose.yml files, "
-        "example: 5s, 10m,... ). If there is a timeout this command will exit returning 1. (default: wait for an infinite amount of time)"
-    )
-
-    args = parser.parse_args()
+def main(args):
     # ! FIXME: conditional adding to >> "docker-compose.yml"
-
     docker_compose_client = dc_client(environ)
     basedir = path.basename(path.dirname(path.abspath(args.file[0])) if args.file else getcwd())
     project_name = args.project_name or basedir
@@ -116,4 +114,5 @@ def main():
         sleep(1)
 
 if __name__ == "__main__":
-    main()
+    args = parser.parse_args()
+    main(args)
